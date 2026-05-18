@@ -1,0 +1,114 @@
+name: Build and Release
+
+# This workflow depends on the following external repositories:
+#   https://github.com/haasn/libplacebo  (the library being built)
+#   https://github.com/msys2/setup-msys2  (MSYS2 CI action)
+#   https://github.com/softprops/action-gh-release  (release upload)
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      libplacebo_ref:
+        description: 'libplacebo git ref (tag, branch, commit)'
+        default: 'master'
+        type: string
+      enable_vulkan:
+        description: 'Vulkan backend'
+        default: '1'
+        type: choice
+        options: ['0', '1']
+      enable_d3d11:
+        description: 'D3D11 backend'
+        default: '1'
+        type: choice
+        options: ['0', '1']
+      enable_opengl:
+        description: 'OpenGL backend'
+        default: '1'
+        type: choice
+        options: ['0', '1']
+
+jobs:
+  build:
+    runs-on: windows-latest
+    env:
+      # workflow_dispatch: follow input. Tag/other pushes: repo variable LIBPLACEBO_REF, else master.
+      # (This repo's release tag name is not required to match haasn/libplacebo tags.)
+      PL_REF: ${{ github.event_name == 'workflow_dispatch' && inputs.libplacebo_ref || vars.LIBPLACEBO_REF || 'master' }}
+
+    steps:
+      - name: Checkout build scripts (this repo)
+        uses: actions/checkout@v4
+
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            zip
+            mingw-w64-ucrt-x86_64-meson
+            mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-python
+            mingw-w64-ucrt-x86_64-glslang
+            mingw-w64-ucrt-x86_64-spirv-tools
+            mingw-w64-ucrt-x86_64-spirv-cross
+            mingw-w64-ucrt-x86_64-lcms2
+            mingw-w64-ucrt-x86_64-libdovi
+            mingw-w64-ucrt-x86_64-vulkan-headers
+            mingw-w64-ucrt-x86_64-vulkan-loader
+            mingw-w64-ucrt-x86_64-llvm
+            mingw-w64-ucrt-x86_64-tools
+
+      # ↓ This is where we pull in libplacebo source.
+      #   Repository: https://github.com/haasn/libplacebo
+      - name: Checkout libplacebo source
+        uses: actions/checkout@v4
+        with:
+          repository: haasn/libplacebo
+          ref: ${{ env.PL_REF }}
+          path: libplacebo
+
+      - name: Build
+        shell: msys2 {0}
+        env:
+          ENABLE_VULKAN: ${{ inputs.enable_vulkan || '1' }}
+          ENABLE_D3D11: ${{ inputs.enable_d3d11 || '1' }}
+          ENABLE_OPENGL: ${{ inputs.enable_opengl || '1' }}
+        run: |
+          bash ./build.sh --source libplacebo --output libplacebo/dist
+
+      - name: Package
+        shell: msys2 {0}
+        id: package
+        run: |
+          set -euo pipefail
+          dist="libplacebo/dist"
+          dll=$(find "$dist/bin" -maxdepth 1 -name 'libplacebo-*.dll' -print -quit)
+          if [[ -z "${dll}" ]]; then
+            echo "ERROR: DLL not found under $dist/bin"
+            exit 1
+          fi
+          base=$(basename "$dll" .dll)
+          ver="${base#libplacebo-}"
+          zipfile="libplacebo-${ver}-prebuilt.zip"
+          rm -f "$zipfile"
+          (cd "$dist" && zip -r "$GITHUB_WORKSPACE/$zipfile" .)
+          echo "artifact=$zipfile" >> "$GITHUB_OUTPUT"
+
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ${{ steps.package.outputs.artifact }}
+          generate_release_notes: true
+
+      - name: Upload Artifact (manual run)
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: libplacebo-prebuilt
+          path: ${{ steps.package.outputs.artifact }}
