@@ -114,6 +114,8 @@ fi
 
 BUILD_DIR="$PL_SOURCE/build"
 mkdir -p "$DIST_DIR"
+# Meson requires an absolute --prefix (e.g. CI passes libplacebo/dist).
+DIST_DIR="$(cd "$DIST_DIR" && pwd)"
 
 # ---- Check environment ----
 if [[ "${MSYSTEM:-}" != "UCRT64" ]]; then
