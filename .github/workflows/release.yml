@@ -30,6 +30,10 @@ on:
         type: choice
         options: ['0', '1']
 
+# Default GITHUB_TOKEN is read-only in many repos → gh-release gets HTTP 403 without this.
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: windows-latest
