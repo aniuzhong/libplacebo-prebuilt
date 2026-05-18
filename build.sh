@@ -101,10 +101,14 @@ if [[ ! -f "$PL_SOURCE/meson.build" ]]; then
     exit 1
 fi
 
-# glad (OpenGL) is vendored via submodules; CI shallow clones and plain clones need this.
+# glad (OpenGL) is vendored via git submodules (CI: checkout submodules + git here if needed).
 if [[ -e "$PL_SOURCE/.git" && -f "$PL_SOURCE/.gitmodules" ]]; then
-    echo "Syncing git submodules (OpenGL/glad)..."
-    git -C "$PL_SOURCE" submodule update --init --recursive
+    if command -v git &>/dev/null; then
+        echo "Syncing git submodules (OpenGL/glad)..."
+        git -C "$PL_SOURCE" submodule update --init --recursive
+    else
+        echo "  NOTE: git not in PATH; skipping submodule sync (submodules must already be present)."
+    fi
 fi
 
 echo "  Source:      $PL_SOURCE"
