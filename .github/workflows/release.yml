@@ -71,6 +71,7 @@ jobs:
           repository: haasn/libplacebo
           ref: ${{ env.PL_REF }}
           path: libplacebo
+          submodules: recursive
 
       - name: Build
         shell: msys2 {0}

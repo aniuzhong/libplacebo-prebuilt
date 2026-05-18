@@ -91,7 +91,7 @@ else
     echo "Cloning libplacebo from GitHub..."
     PL_SOURCE="$SCRIPT_DIR/build/libplacebo-src"
     if [[ ! -d "$PL_SOURCE" ]]; then
-        git clone https://github.com/haasn/libplacebo.git "$PL_SOURCE"
+        git clone --recurse-submodules https://github.com/haasn/libplacebo.git "$PL_SOURCE"
     fi
 fi
 
@@ -99,6 +99,12 @@ fi
 if [[ ! -f "$PL_SOURCE/meson.build" ]]; then
     echo "ERROR: $PL_SOURCE does not look like a libplacebo source tree (no meson.build)"
     exit 1
+fi
+
+# glad (OpenGL) is vendored via submodules; CI shallow clones and plain clones need this.
+if [[ -e "$PL_SOURCE/.git" && -f "$PL_SOURCE/.gitmodules" ]]; then
+    echo "Syncing git submodules (OpenGL/glad)..."
+    git -C "$PL_SOURCE" submodule update --init --recursive
 fi
 
 echo "  Source:      $PL_SOURCE"
